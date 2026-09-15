@@ -13,17 +13,21 @@
      ============================================================ -->
 <style>
   :root {
-    --bg: #f6f4ef;          /* page background, warm off-white */
-    --ink: #242220;         /* main text color, near-black */
-    --ink-soft: rgba(36,34,32,0.55);
-    --ink-faint: rgba(36,34,32,0.35);
-    --accent: #3f6f66;      /* single accent color used for state */
-    --accent-dark: #2d514a;
-    --accent-soft: rgba(63,111,102,0.18);
-    --line: rgba(36,34,32,0.20);   /* connection lines between nodes */
-    --panel-bg: #fffdf9;
-    --panel-shadow: 0 8px 30px rgba(36,34,32,0.18);
-    --radius: 10px;
+    --bg: #f5f3ee;          /* page background, warm off-white */
+    --bg-dot: rgba(36,34,32,0.07);  /* faint canvas texture dots */
+    --ink: #23211f;         /* main text color, near-black */
+    --ink-soft: rgba(35,33,31,0.55);
+    --ink-faint: rgba(35,33,31,0.32);
+    --accent: #3c6b62;      /* single accent color used for state */
+    --accent-dark: #294d46;
+    --accent-soft: rgba(60,107,98,0.16);
+    --line: rgba(35,33,31,0.22);   /* connection lines between nodes */
+    --panel-bg: #fffdfa;
+    --panel-shadow: 0 20px 50px rgba(24,22,20,0.16), 0 2px 8px rgba(24,22,20,0.06);
+    --node-shadow: 0 2px 6px rgba(24,22,20,0.10);
+    --node-shadow-hover: 0 10px 20px rgba(24,22,20,0.16);
+    --radius: 14px;
+    --ease: cubic-bezier(0.22, 1, 0.36, 1);
   }
 
   * { box-sizing: border-box; }
@@ -38,24 +42,40 @@
     overflow: hidden; /* the canvas area scrolls internally, page itself doesn't */
   }
 
+  /* A serif is reserved for a few moments of emphasis (app title, modal
+     headings) so the UI doesn't read as a generic system dashboard. */
+  .display-type {
+    font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+    font-weight: 500;
+  }
+
   /* ---------- Toolbar ---------- */
   #toolbar {
     position: fixed;
     top: 0; left: 0; right: 0;
     z-index: 20;
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: space-between;
-    padding: 18px 28px;
-    background: linear-gradient(to bottom, var(--bg) 70%, transparent);
+    padding: 20px 30px;
+    background: linear-gradient(to bottom, var(--bg) 55%, transparent);
   }
 
   #toolbar h1 {
-    font-size: 17px;
-    font-weight: 600;
-    letter-spacing: 0.02em;
+    font-size: 19px;
+    letter-spacing: 0.01em;
     margin: 0;
   }
+
+  #saveStatus {
+    display: block;
+    margin-top: 4px;
+    font-size: 11px;
+    color: var(--ink-faint);
+    letter-spacing: 0.01em;
+    transition: color 0.3s ease;
+  }
+  #saveStatus.flash { color: var(--accent); }
 
   #toolbar .actions {
     display: flex;
@@ -65,40 +85,46 @@
 
   button, .file-btn {
     font-family: inherit;
-    font-size: 13px;
-    color: var(--ink);
-    background: var(--panel-bg);
+    font-size: 12.5px;
+    color: var(--ink-soft);
+    background: transparent;
     border: 1px solid var(--ink-faint);
-    border-radius: 7px;
-    padding: 7px 13px;
+    border-radius: 20px;
+    padding: 7px 15px;
     cursor: pointer;
-    transition: border-color 0.15s ease, background 0.15s ease;
+    transition: border-color 0.2s var(--ease), background 0.2s var(--ease), color 0.2s var(--ease), box-shadow 0.2s var(--ease);
   }
   button:hover, .file-btn:hover {
     border-color: var(--ink-soft);
-    background: #fff;
+    color: var(--ink);
+    background: rgba(255,255,255,0.6);
   }
   button.primary {
     background: var(--accent);
     border-color: var(--accent);
     color: #fff;
   }
-  button.primary:hover { background: var(--accent-dark); }
+  button.primary:hover {
+    background: var(--accent-dark);
+    border-color: var(--accent-dark);
+    color: #fff;
+    box-shadow: 0 4px 14px rgba(41,77,70,0.3);
+  }
   button.danger {
     color: #8a3b2f;
-    border-color: rgba(138,59,47,0.4);
+    border-color: rgba(138,59,47,0.35);
   }
-  button.danger:hover { background: rgba(138,59,47,0.08); }
+  button.danger:hover { background: rgba(138,59,47,0.08); color: #8a3b2f; }
 
   input[type="file"] { display: none; }
 
   /* ---------- Legend ---------- */
   #legend {
     position: fixed;
-    top: 56px; left: 28px;
+    top: 60px; left: 30px;
     z-index: 20;
-    font-size: 11.5px;
-    color: var(--ink-soft);
+    font-size: 11px;
+    color: var(--ink-faint);
     display: flex;
     gap: 18px;
     flex-wrap: wrap;
@@ -120,6 +146,9 @@
     position: relative;
     width: 2400px;
     height: 1500px;
+    /* Faint dot grid: a subtle sense of "map" without competing with the nodes. */
+    background-image: radial-gradient(var(--bg-dot) 1px, transparent 1px);
+    background-size: 28px 28px;
   }
 
   #edgeLayer {
@@ -128,7 +157,24 @@
     width: 100%;
     height: 100%;
     pointer-events: none; /* clicks pass through to nodes */
+    overflow: visible;
   }
+
+  .edge {
+    fill: none;
+    stroke: var(--line);
+    stroke-width: 1.3;
+    transition: stroke 0.25s var(--ease), stroke-width 0.25s var(--ease), opacity 0.25s var(--ease);
+  }
+  .edge-active {
+    stroke: var(--accent);
+    stroke-width: 1.8;
+    opacity: 1 !important;
+  }
+  /* When a node is hovered, everything not connected to it fades back
+     so the relevant path through the tree comes forward. */
+  .canvas-hovering .edge:not(.edge-active) { opacity: 0.28; }
+  .canvas-hovering .node:not(.node-active):not(.node-neighbor) { opacity: 0.4; }
 
   /* ---------- Nodes ---------- */
   .node {
@@ -136,16 +182,32 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 6px;
+    gap: 7px;
     transform: translate(-50%, -50%);
     cursor: grab;
     user-select: none;
     touch-action: none;
-    width: 110px;
+    width: 112px;
+    transition: opacity 0.25s var(--ease);
   }
   .node:active { cursor: grabbing; }
 
-  .node-shape-svg { display: block; overflow: visible; }
+  .node-shape-svg {
+    display: block;
+    overflow: visible;
+    filter: drop-shadow(var(--node-shadow));
+    transition: filter 0.25s var(--ease), transform 0.25s var(--ease);
+  }
+  .node:hover .node-shape-svg {
+    transform: scale(1.07);
+    filter: drop-shadow(var(--node-shadow-hover));
+  }
+  .node.dragging .node-shape-svg {
+    transform: scale(1.1);
+    filter: drop-shadow(var(--node-shadow-hover));
+  }
+  .node.dragging { transition: none; }
+  .node.node-neighbor .node-shape-svg { transform: scale(1.04); }
 
   .node-label {
     font-size: 12px;
@@ -153,11 +215,15 @@
     text-align: center;
     color: var(--ink);
     max-width: 100px;
+    transition: color 0.2s ease;
   }
+  .node:hover .node-label,
+  .node.node-active .node-label { color: var(--ink); }
 
   /* Shape base style, state is applied via fill/stroke/opacity below */
   .node-shape {
     stroke-width: 1.6;
+    transition: fill 0.35s var(--ease), stroke 0.35s var(--ease), opacity 0.35s var(--ease), stroke-dasharray 0.35s var(--ease);
   }
   .state-not_started .node-shape {
     fill: var(--bg);
@@ -183,13 +249,16 @@
   #modalOverlay {
     position: fixed;
     inset: 0;
-    background: rgba(36,34,32,0.28);
+    background: rgba(30,28,26,0.32);
+    backdrop-filter: blur(3px);
     display: none;
     align-items: center;
     justify-content: center;
     z-index: 100;
+    opacity: 0;
+    transition: opacity 0.2s var(--ease);
   }
-  #modalOverlay.open { display: flex; }
+  #modalOverlay.open { display: flex; opacity: 1; }
 
   #modalBox {
     background: var(--panel-bg);
@@ -199,43 +268,56 @@
     max-width: calc(100vw - 40px);
     max-height: calc(100vh - 60px);
     overflow-y: auto;
-    padding: 22px;
+    padding: 24px;
+    transform: translateY(6px) scale(0.98);
+    transition: transform 0.22s var(--ease);
   }
+  #modalOverlay.open #modalBox { transform: translateY(0) scale(1); }
 
   #modalBox h2 {
     margin: 0 0 4px;
-    font-size: 16px;
+    font-size: 18px;
   }
   #modalBox .category-tag {
     font-size: 11.5px;
     color: var(--ink-soft);
-    margin-bottom: 16px;
+    margin-bottom: 18px;
+    letter-spacing: 0.02em;
   }
 
   .field { margin-bottom: 14px; }
   .field label {
     display: block;
-    font-size: 11.5px;
-    color: var(--ink-soft);
-    margin-bottom: 5px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--ink-faint);
+    margin-bottom: 6px;
   }
   .field input[type="text"],
   .field select {
     width: 100%;
     font-family: inherit;
-    font-size: 13px;
-    padding: 7px 9px;
+    font-size: 13.5px;
+    padding: 8px 10px;
     border: 1px solid var(--ink-faint);
-    border-radius: 6px;
+    border-radius: 8px;
     background: #fff;
     color: var(--ink);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  }
+  .field input[type="text"]:focus,
+  .field select:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
   }
 
   .connections-list {
     max-height: 130px;
     overflow-y: auto;
     border: 1px solid var(--ink-faint);
-    border-radius: 6px;
+    border-radius: 8px;
     padding: 6px 9px;
     background: #fff;
   }
@@ -245,7 +327,7 @@
     gap: 7px;
     font-size: 13px;
     color: var(--ink);
-    padding: 3px 0;
+    padding: 4px 0;
     cursor: pointer;
   }
   .connections-list .empty-note {
@@ -265,12 +347,13 @@
     float: right;
     border: none;
     background: none;
-    font-size: 16px;
+    font-size: 17px;
     color: var(--ink-faint);
     cursor: pointer;
     padding: 0 2px;
+    transition: color 0.15s ease, transform 0.15s ease;
   }
-  .modal-close-x:hover { color: var(--ink); }
+  .modal-close-x:hover { color: var(--ink); transform: rotate(90deg); }
 </style>
 </head>
 <body>
@@ -279,11 +362,14 @@
        TOOLBAR — title + global actions
        ============================================================ -->
   <div id="toolbar">
-    <h1>Skill Tree</h1>
+    <div>
+      <h1 class="display-type">Skill Tree</h1>
+      <span id="saveStatus">Autosaved to this browser</span>
+    </div>
     <div class="actions">
       <button id="btnAdd" class="primary">+ Add</button>
-      <button id="btnExport">Export</button>
-      <label class="file-btn" for="importFile">Import</label>
+      <button id="btnExport" title="Optional: download a backup .json file">Export</button>
+      <label class="file-btn" for="importFile" title="Optional: load a .json file, replacing what's here">Import</label>
       <input type="file" id="importFile" accept="application/json">
     </div>
   </div>
@@ -374,6 +460,22 @@ function loadData() {
 
 function saveData() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
+  flashSaveStatus();
+}
+
+// Brief visual confirmation that a change was saved, so it's clear
+// nothing needs to be exported/imported just to keep it.
+let saveStatusTimer;
+function flashSaveStatus() {
+  const el = document.getElementById("saveStatus");
+  if (!el) return;
+  el.textContent = "Saved";
+  el.classList.add("flash");
+  clearTimeout(saveStatusTimer);
+  saveStatusTimer = setTimeout(() => {
+    el.textContent = "Autosaved to this browser";
+    el.classList.remove("flash");
+  }, 1200);
 }
 
 function getNode(id) {
@@ -514,6 +616,20 @@ const canvas = document.getElementById("canvas");
 const edgeLayer = document.getElementById("edgeLayer");
 const NODE_RADIUS = 24;
 
+// Builds a gently curved connection line (a quadratic bezier) instead of a
+// straight one — reads more like an organic branch/map and less like a
+// wiring diagram. The curve amount is proportional to the distance so
+// short and long connections both look right.
+function curvePathD(x1, y1, x2, y2) {
+  const dx = x2 - x1, dy = y2 - y1;
+  const dist = Math.hypot(dx, dy) || 1;
+  const mx = (x1 + x2) / 2, my = (y1 + y2) / 2;
+  const perpX = -dy / dist, perpY = dx / dist;
+  const bow = dist * 0.12;
+  const cx = mx + perpX * bow, cy = my + perpY * bow;
+  return `M ${x1} ${y1} Q ${cx} ${cy} ${x2} ${y2}`;
+}
+
 function render() {
   // Clear previous nodes (keep the svg edge layer, redraw it separately).
   canvas.querySelectorAll(".node").forEach(el => el.remove());
@@ -527,19 +643,17 @@ function render() {
     n.connections.forEach(cid => {
       const other = getNode(cid);
       if (!other) return;
-      const pairKey = [n.id, cid].sort().join("|");
-      if (drawnPairs.has(pairKey)) return; // avoid drawing the same line twice
-      drawnPairs.add(pairKey);
+      const [aId, bId] = [n.id, cid].sort();
+      if (drawnPairs.has(aId + "|" + bId)) return; // avoid drawing the same line twice
+      drawnPairs.add(aId + "|" + bId);
 
-      const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
-      line.setAttribute("x1", n.x);
-      line.setAttribute("y1", n.y);
-      line.setAttribute("x2", other.x);
-      line.setAttribute("y2", other.y);
-      line.setAttribute("stroke", "var(--line)");
-      line.setAttribute("stroke-width", "1.4");
-      line.id = "edge-" + pairKey;
-      edgeLayer.appendChild(line);
+      const a = getNode(aId), b = getNode(bId);
+      const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      path.setAttribute("d", curvePathD(a.x, a.y, b.x, b.y));
+      path.classList.add("edge");
+      path.dataset.a = aId;
+      path.dataset.b = bId;
+      edgeLayer.appendChild(path);
     });
   });
 
@@ -625,6 +739,10 @@ function shapeElement(category, cx, cy, r) {
    Otherwise it's treated as a click (open the detail modal).
    ================================================================== */
 
+// True while any node is being dragged, so hover-highlight logic below
+// doesn't fire while the pointer sweeps across other nodes mid-drag.
+let isDragging = false;
+
 function attachNodeInteractions(el, nodeId) {
   let dragging = false;
   let startX = 0, startY = 0;
@@ -640,7 +758,12 @@ function attachNodeInteractions(el, nodeId) {
 
     function onMove(ev) {
       const dx = ev.clientX - startX, dy = ev.clientY - startY;
-      if (!dragging && Math.hypot(dx, dy) > 4) dragging = true;
+      if (!dragging && Math.hypot(dx, dy) > 4) {
+        dragging = true;
+        isDragging = true;
+        el.classList.add("dragging");
+        clearHoverHighlight();
+      }
       if (dragging) {
         n.x = nodeStartX + dx;
         n.y = nodeStartY + dy;
@@ -652,6 +775,8 @@ function attachNodeInteractions(el, nodeId) {
     function onUp() {
       el.removeEventListener("pointermove", onMove);
       el.removeEventListener("pointerup", onUp);
+      el.classList.remove("dragging");
+      isDragging = false;
       if (dragging) {
         saveData();
       } else {
@@ -661,31 +786,52 @@ function attachNodeInteractions(el, nodeId) {
     el.addEventListener("pointermove", onMove);
     el.addEventListener("pointerup", onUp);
   });
+
+  // Hovering a node dims everything unrelated, so the immediate
+  // neighborhood of what you're looking at comes forward.
+  el.addEventListener("pointerenter", () => {
+    if (isDragging) return;
+    highlightNeighborhood(nodeId);
+  });
+  el.addEventListener("pointerleave", () => {
+    if (isDragging) return;
+    clearHoverHighlight();
+  });
 }
 
-// While dragging, only reposition the lines touching the moved node
+function highlightNeighborhood(nodeId) {
+  const n = getNode(nodeId);
+  if (!n) return;
+  canvas.classList.add("canvas-hovering");
+
+  const el = canvas.querySelector(`.node[data-id="${nodeId}"]`);
+  if (el) el.classList.add("node-active");
+
+  const neighborIds = new Set(n.connections);
+  store.nodes.forEach(other => { if (other.connections.includes(nodeId)) neighborIds.add(other.id); });
+  neighborIds.forEach(nid => {
+    const nEl = canvas.querySelector(`.node[data-id="${nid}"]`);
+    if (nEl) nEl.classList.add("node-neighbor");
+  });
+
+  edgeLayer.querySelectorAll(".edge").forEach(edge => {
+    if (edge.dataset.a === nodeId || edge.dataset.b === nodeId) edge.classList.add("edge-active");
+  });
+}
+
+function clearHoverHighlight() {
+  canvas.classList.remove("canvas-hovering");
+  canvas.querySelectorAll(".node-active, .node-neighbor").forEach(el => el.classList.remove("node-active", "node-neighbor"));
+  edgeLayer.querySelectorAll(".edge-active").forEach(el => el.classList.remove("edge-active"));
+}
+
+// While dragging, only reposition the curve touching the moved node
 // (cheaper than re-rendering everything on every pointer move).
 function updateEdgesFor(nodeId) {
-  const n = getNode(nodeId);
-  n.connections.forEach(cid => {
-    const pairKey = [nodeId, cid].sort().join("|");
-    const line = document.getElementById("edge-" + pairKey);
-    if (!line) return;
-    if (line.getAttribute("x1") == getNode(cid).x && line.getAttribute("y1") == getNode(cid).y) {
-      line.setAttribute("x2", n.x); line.setAttribute("y2", n.y);
-    } else {
-      line.setAttribute("x1", n.x); line.setAttribute("y1", n.y);
-    }
-  });
-  // Also catch edges where this node is the "other" side.
-  store.nodes.forEach(other => {
-    if (other.connections.includes(nodeId)) {
-      const pairKey = [other.id, nodeId].sort().join("|");
-      const line = document.getElementById("edge-" + pairKey);
-      if (!line) return;
-      const otherIsFirst = line.getAttribute("x1") == other.x && line.getAttribute("y1") == other.y;
-      if (otherIsFirst) { line.setAttribute("x2", n.x); line.setAttribute("y2", n.y); }
-      else { line.setAttribute("x1", n.x); line.setAttribute("y1", n.y); }
+  edgeLayer.querySelectorAll(".edge").forEach(edge => {
+    if (edge.dataset.a === nodeId || edge.dataset.b === nodeId) {
+      const a = getNode(edge.dataset.a), b = getNode(edge.dataset.b);
+      edge.setAttribute("d", curvePathD(a.x, a.y, b.x, b.y));
     }
   });
 }
@@ -724,7 +870,7 @@ function openDetailModal(nodeId) {
 
   modalBox.innerHTML = `
     <button class="modal-close-x" id="mClose">✕</button>
-    <h2>${escapeHtml(n.name)}</h2>
+    <h2 class="display-type">${escapeHtml(n.name)}</h2>
     <div class="category-tag">${n.category} · ${STATE_LABELS[n.state]}</div>
     <div class="field">
       <label>Connected to</label>
@@ -788,7 +934,7 @@ function openFormModal(nodeId) {
 
   modalBox.innerHTML = `
     <button class="modal-close-x" id="mClose">✕</button>
-    <h2>${title}</h2>
+    <h2 class="display-type">${title}</h2>
     <div class="field">
       <label>Name</label>
       <input type="text" id="fName" value="${editing ? escapeHtml(editing.name) : ""}" placeholder="e.g. Watercolor Painting">
